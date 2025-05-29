@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 import os
 import sys
+from sqlalchemy import func
 
 app = Flask(__name__)
 
@@ -42,7 +43,7 @@ def add_country():
         return jsonify({"error": "Country name is required"}), 400
 
     # Check if country already exists
-    existing = Country.query.filter_by(name=country_name).first()
+    existing = Country.query.filter(func.lower(Country.name) == country_name.lower()).first()
     if existing:
         return jsonify({"error": "Country already exists"}), 400
 
