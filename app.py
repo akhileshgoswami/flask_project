@@ -4,14 +4,13 @@ import os
 
 app = Flask(__name__)
 
-# For production (Railway), use DATABASE_URL environment variable.
-# For local testing, fallback to SQLite.
+# For production (Railway), use DATABASE_URL; fallback to local SQLite for dev
 app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///test.db')
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Model for Country
+# Country model
 class Country(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -19,7 +18,7 @@ class Country(db.Model):
     def __repr__(self):
         return f'<Country {self.name}>'
 
-# Route to get all countries
+# Route: Get all countries
 @app.route('/countries', methods=['GET'])
 def get_countries():
     countries = Country.query.all()
@@ -28,7 +27,7 @@ def get_countries():
         "count": len(countries)
     })
 
-# Route to add a new country
+# Route: Add a new country
 @app.route('/countrie', methods=['POST'])
 def add_country():
     data = request.get_json()
@@ -47,7 +46,5 @@ def add_country():
     return jsonify({"message": f"Country '{country_name}' added.", "id": new_country.id}), 201
 
 if __name__ == '__main__':
-    with app.app_context():
-        db.create_all()  # Create tables inside app context
     port = int(os.environ.get('PORT', 5051))
     app.run(host='0.0.0.0', port=port, debug=True)
