@@ -1,11 +1,17 @@
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
 import os
+import sys
 
 app = Flask(__name__)
 
 # For production (Railway), use DATABASE_URL; fallback to local SQLite for dev
-app.config['SQLALCHEMY_DATABASE_URI'] = os.environ.get('DATABASE_URL', 'sqlite:///test.db')
+db_url = os.environ.get('DATABASE_URL', 'sqlite:///test.db')
+if db_url.startswith("postgres://"):
+    # Fix for old postgres URL format
+    db_url = db_url.replace("postgres://", "postgresql://", 1)
+
+app.config['SQLALCHEMY_DATABASE_URI'] = db_url
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
@@ -46,5 +52,11 @@ def add_country():
     return jsonify({"message": f"Country '{country_name}' added.", "id": new_country.id}), 201
 
 if __name__ == '__main__':
-    port = int(os.environ.get('PORT', 5051))
-    app.run(host='0.0.0.0', port=port, debug=True)
+    if len(sys.argv) > 1 and sys.argv[1] == 'initdb':
+        # Initialize the database tables if run with 'initdb' argument
+        with app.app_context():
+            db.create_all()
+            print("✅ Database tables created.")
+    else:
+        port = int(os.environ.get('PORT', 5051))
+        app.run(host='0.0.0.0', port=port, debug=True)
