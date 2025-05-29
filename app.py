@@ -29,7 +29,7 @@ def get_countries():
     })
 
 # Route to add a new country
-@app.route('/countries', methods=['POST'])
+@app.route('/countrie', methods=['POST'])
 def add_country():
     data = request.get_json()
     country_name = data.get('name')
