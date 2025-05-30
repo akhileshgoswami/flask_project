@@ -3,6 +3,8 @@ from flask_sqlalchemy import SQLAlchemy
 import os
 import sys
 from sqlalchemy import func
+import instaloader
+import re
 
 app = Flask(__name__)
 
@@ -17,7 +19,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# Country model
+# === Database Model ===
 class Country(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -25,7 +27,7 @@ class Country(db.Model):
     def __repr__(self):
         return f'<Country {self.name}>'
 
-# Route: Get all countries
+# === Route: Get all countries ===
 @app.route('/countries', methods=['GET'])
 def get_countries():
     countries = Country.query.all()
@@ -34,7 +36,7 @@ def get_countries():
         "count": len(countries)
     })
 
-# Route: Add a new country
+# === Route: Add a new country ===
 @app.route('/countries', methods=['POST'])
 def add_country():
     data = request.get_json()
@@ -42,7 +44,6 @@ def add_country():
     if not country_name:
         return jsonify({"error": "Country name is required"}), 400
 
-    # Check if country already exists
     existing = Country.query.filter(func.lower(Country.name) == country_name.lower()).first()
     if existing:
         return jsonify({"error": "Country already exists"}), 400
@@ -52,9 +53,49 @@ def add_country():
     db.session.commit()
     return jsonify({"message": f"Country '{country_name}' added.", "id": new_country.id}), 201
 
+# === Helper: Extract Instagram shortcode ===
+def extract_shortcode(url):
+    patterns = [
+        r'/reel/([A-Za-z0-9_-]+)/',
+        r'/p/([A-Za-z0-9_-]+)/',
+        r'/tv/([A-Za-z0-9_-]+)/'
+    ]
+    for pattern in patterns:
+        match = re.search(pattern, url)
+        if match:
+            return match.group(1)
+    return None
+
+# === Route: Instagram video download URL ===
+@app.route('/download_instagram', methods=['POST'])
+def download_instagram():
+    data = request.get_json()
+    url = data.get('url')
+
+    if not url:
+        return jsonify({"error": "Instagram URL is required"}), 400
+
+    shortcode = extract_shortcode(url)
+    if not shortcode:
+        return jsonify({"error": "Invalid Instagram URL format"}), 400
+
+    L = instaloader.Instaloader()
+    try:
+        post = instaloader.Post.from_shortcode(L.context, shortcode)
+        if post.is_video:
+            return jsonify({
+                "video_url": post.video_url,
+                "caption": post.caption,
+                "author": post.owner_username
+            }), 200
+        else:
+            return jsonify({"error": "This post does not contain a video"}), 400
+    except Exception as e:
+        return jsonify({"error": f"Failed to fetch video: {str(e)}"}), 500
+
+# === Run App ===
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'initdb':
-        # Initialize the database tables if run with 'initdb' argument
         with app.app_context():
             db.create_all()
             print("✅ Database tables created.")
