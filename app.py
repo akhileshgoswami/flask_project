@@ -6,7 +6,13 @@ from sqlalchemy import func
 import instaloader
 import re
 
+# Add this import:
+from flask_cors import CORS
+
 app = Flask(__name__)
+
+# Enable CORS for all routes:
+CORS(app)
 
 # For production (Railway), use DATABASE_URL; fallback to local SQLite for dev
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///test.db')
