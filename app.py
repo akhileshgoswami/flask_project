@@ -53,10 +53,24 @@ def login_instagram():
         L = instaloader.Instaloader()
         L.login(insta_user, insta_pass)
         L.save_session_to_file()
+    
         return jsonify({"message": f"✅ Logged in and session saved as .session-{insta_user}"}), 200
     except Exception as e:
         return jsonify({"error": f"Login failed: {str(e)}"}), 500
 
+@app.route('/logout_instagram', methods=['GET'])
+def logout_instagram():
+    insta_user = "instadownloader287"
+    session_file = f".session-{insta_user}"
+
+    try:
+        if os.path.exists(session_file):
+            os.remove(session_file)
+            return jsonify({"message": f"✅ Logged out and session file '{session_file}' deleted"}), 200
+        else:
+            return jsonify({"message": f"ℹ️ No active session found for user '{insta_user}'"}), 404
+    except Exception as e:
+        return jsonify({"error": f"Logout failed: {str(e)}"}), 500
 # === Helpers ===
 def extract_shortcode(url):
     patterns = [
