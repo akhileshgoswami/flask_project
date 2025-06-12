@@ -1,23 +1,22 @@
 from flask import Flask, jsonify, request
 from flask_sqlalchemy import SQLAlchemy
+from flask_cors import CORS
+from sqlalchemy import func
+from dotenv import load_dotenv
 import os
 import sys
-from sqlalchemy import func
 import instaloader
 import re
-import json
-# Add this import:
-from flask_cors import CORS
+
+# Load environment variables from .env (for local dev)
+load_dotenv()
 
 app = Flask(__name__)
-
-# Enable CORS for all routes:
 CORS(app)
 
-# For production (Railway), use DATABASE_URL; fallback to local SQLite for dev
+# Database config
 db_url = os.environ.get('DATABASE_URL', 'sqlite:///test.db')
 if db_url.startswith("postgres://"):
-    # Fix for old postgres URL format
     db_url = db_url.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = db_url
@@ -25,7 +24,7 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 
 db = SQLAlchemy(app)
 
-# === Database Model ===
+# === DB Model ===
 class Country(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     name = db.Column(db.String(100), unique=True, nullable=False)
@@ -33,7 +32,7 @@ class Country(db.Model):
     def __repr__(self):
         return f'<Country {self.name}>'
 
-# === Route: Get all countries ===
+# === Routes ===
 @app.route('/countries', methods=['GET'])
 def get_countries():
     countries = Country.query.all()
@@ -42,24 +41,23 @@ def get_countries():
         "count": len(countries)
     })
 
-# === Route: Add a new country ===
-@app.route('/countries', methods=['POST'])
-def add_country():
-    data = request.get_json()
-    country_name = data.get('name')
-    if not country_name:
-        return jsonify({"error": "Country name is required"}), 400
+@app.route('/login_instagram', methods=['GET'])
+def login_instagram():
+    insta_user = os.environ.get("INSTA_USERNAME")
+    insta_pass = os.environ.get("INSTA_PASSWORD")
 
-    existing = Country.query.filter(func.lower(Country.name) == country_name.lower()).first()
-    if existing:
-        return jsonify({"error": "Country already exists"}), 400
+    if not insta_user or not insta_pass:
+        return jsonify({"error": "Username and password are required as query params"}), 400
 
-    new_country = Country(name=country_name)
-    db.session.add(new_country)
-    db.session.commit()
-    return jsonify({"message": f"Country '{country_name}' added.", "id": new_country.id}), 201
+    try:
+        L = instaloader.Instaloader()
+        L.login(insta_user, insta_pass)
+        L.save_session_to_file()
+        return jsonify({"message": f"✅ Logged in and session saved as .session-{insta_user}"}), 200
+    except Exception as e:
+        return jsonify({"error": f"Login failed: {str(e)}"}), 500
 
-# === Helper: Extract Instagram shortcode ==
+# === Helpers ===
 def extract_shortcode(url):
     patterns = [
         r'/reel/([A-Za-z0-9_-]+)/',
@@ -72,12 +70,11 @@ def extract_shortcode(url):
             return match.group(1)
     return None
 
-# === Route: Instagram video download URL ===
+# === Instagram downloader (anonymous) ===
 @app.route('/download_instagram', methods=['POST'])
 def download_instagram():
     data = request.get_json()
     url = data.get('url')
-
     if not url:
         return jsonify({"error": "Instagram URL is required"}), 400
 
@@ -85,11 +82,14 @@ def download_instagram():
     if not shortcode:
         return jsonify({"error": "Invalid Instagram URL format"}), 400
 
-    L = instaloader.Instaloader()
     try:
+        L = instaloader.Instaloader()
+        L.context._session.headers.update({
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 Chrome/119.0.0.0 Safari/537.36'
+        })
+
         post = instaloader.Post.from_shortcode(L.context, shortcode)
-        # details =  json.dumps(vars(post))
-        # print(vars(post))
+
         if post.is_video:
             return jsonify({
                 "video_url": post.video_url,
@@ -98,10 +98,52 @@ def download_instagram():
             }), 200
         else:
             return jsonify({"error": "This post does not contain a video"}), 400
+
     except Exception as e:
         return jsonify({"error": f"Failed to fetch video: {str(e)}"}), 500
 
-# === Run App ===
+@app.route('/download_instagram_login', methods=['POST'])
+def download_instagram_with_login():
+    data = request.get_json()
+    url = data.get('url')
+    if not url:
+        return jsonify({"error": "Instagram URL is required"}), 400
+
+    shortcode = extract_shortcode(url)
+    if not shortcode:
+        return jsonify({"error": "Invalid Instagram URL format"}), 400
+
+    insta_user = os.environ.get("INSTA_USERNAME")
+    insta_pass = os.environ.get("INSTA_PASSWORD")
+
+    if not insta_user or not insta_pass:
+        return jsonify({"error": "Instagram credentials not set"}), 500
+
+    try:
+        L = instaloader.Instaloader()
+
+        # Try loading saved session
+        try:
+            L.load_session_from_file(insta_user)
+        except FileNotFoundError:
+            L.login(insta_user, insta_pass)
+            L.save_session_to_file()
+
+        post = instaloader.Post.from_shortcode(L.context, shortcode)
+
+        if post.is_video:
+            return jsonify({
+                "video_url": post.video_url,
+                "caption": post.caption,
+                "author": post.owner_username
+            }), 200
+        else:
+            return jsonify({"error": "This post does not contain a video"}), 400
+
+    except Exception as e:
+        return jsonify({"error": f"Login or fetch failed: {str(e)}"}), 500
+
+# === App Runner ===
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'initdb':
         with app.app_context():
