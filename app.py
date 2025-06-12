@@ -5,7 +5,7 @@ import sys
 from sqlalchemy import func
 import instaloader
 import re
-
+import json
 # Add this import:
 from flask_cors import CORS
 
@@ -88,6 +88,8 @@ def download_instagram():
     L = instaloader.Instaloader()
     try:
         post = instaloader.Post.from_shortcode(L.context, shortcode)
+        # details =  json.dumps(vars(post))
+        print(vars(post))
         if post.is_video:
             return jsonify({
                 "video_url": post.video_url,
@@ -99,7 +101,7 @@ def download_instagram():
     except Exception as e:
         return jsonify({"error": f"Failed to fetch video: {str(e)}"}), 500
 
-# === Run App ===
+""" # === Run App ===
 if __name__ == '__main__':
     if len(sys.argv) > 1 and sys.argv[1] == 'initdb':
         with app.app_context():
@@ -107,4 +109,4 @@ if __name__ == '__main__':
             print("✅ Database tables created.")
     else:
         port = int(os.environ.get('PORT', 5051))
-        app.run(host='0.0.0.0', port=port, debug=True)
+        app.run(host='0.0.0.0', port=port, debug=True) """
