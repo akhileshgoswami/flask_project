@@ -43,8 +43,8 @@ def get_countries():
 
 @app.route('/login_instagram', methods=['GET'])
 def login_instagram():
-    insta_user = os.environ.get("INSTA_USERNAME")
-    insta_pass = os.environ.get("INSTA_PASSWORD")
+    insta_user = "instadownloader287"
+    insta_pass = "Akhilesh@3699"
 
     if not insta_user or not insta_pass:
         return jsonify({"error": "Username and password are required as query params"}), 400
@@ -113,8 +113,8 @@ def download_instagram_with_login():
     if not shortcode:
         return jsonify({"error": "Invalid Instagram URL format"}), 400
 
-    insta_user = os.environ.get("INSTA_USERNAME")
-    insta_pass = os.environ.get("INSTA_PASSWORD")
+    insta_user ="instadownloader287"
+    insta_pass ="Akhilesh@3699"
 
     if not insta_user or not insta_pass:
         return jsonify({"error": "Instagram credentials not set"}), 500
